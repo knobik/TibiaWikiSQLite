@@ -2,7 +2,13 @@
 
 This set of python scripts parses the Tibia Wikia XML file and generates a database from them. The database dump can be downloaded from http://tibia.wikia.com/wiki/Special:Statistics and is about 200MB~ large. Note that the database dump does not contain image files. Instead, image files are downloaded from the tibia.wikia.com site automatically. This script will download them while running. Downloading these files takes by far the longest time of this script, but the script will cache all downloads, so the script can be interrupted/resumed and will not redownload things it has already downloaded.
 
-# Usage
+## Requirements
+* Linux distribution OS
+* Python 3 with module:
+    * Pillow
+* ImageMagick
+
+## Usage
 The scripts are build for python3 and probably do not work with python2. For image processing, the imagemagick library is used and must be installed.
 
 To create a full database usable by Tibialyzer, run each of these commands (starting with parseXML.py; the order of the other commands does not matter). If you simply want to update, say, quest instructions or hunt directions, you only need to run the addextrainformation.py script (which is much faster than building the database again from scratch).
