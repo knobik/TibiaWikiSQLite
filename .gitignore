@@ -1,0 +1,13 @@
+# Pycharm project files
+/.idea/
+/__pycache__/
+
+# Generated files
+database.db
+pluralMap.txt
+
+# Cache files
+tempcache
+imagecache
+
+tibiawiki_pages_current.xml
