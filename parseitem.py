@@ -1,4 +1,4 @@
-    
+
 # Copyright 2016 Mark Raasveldt
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,6 @@
 
 import math
 import re
-import urllib.request
-import sqlite3
-import time
 
 lookRegex = re.compile('(<div id="twbox-look">[^\n]*)')
 htmlTagRegex = re.compile('<[^>]*>')
@@ -25,12 +22,12 @@ numberRegex = re.compile('([0-9]+[,.]?[0-9]*[,.]?[0-9]*[,.]?[0-9]*[,.]?[0-9]*)')
 imageRegex = re.compile('<a href="([^"]*)"[ \t\n]*class="image image-thumbnail"')
 imageRegex2 = re.compile('src="([^"]*vignette[^"]*)"')
 
-from imageoperations import crop_image, gif_is_animated, convert_to_png, properly_crop_item
+from imageoperations import properly_crop_item
 from urlhelpers import getImage
 
 consumableMap = {
-    'pair of soft boots': ('4 hours', '10000', 'Gold Coin'), 
-    'helmet of the ancients (Enchanted)': ('30 minutes', '1', 'Small Ruby'), 
+    'pair of soft boots': ('4 hours', '10000', 'Gold Coin'),
+    'helmet of the ancients (Enchanted)': ('30 minutes', '1', 'Small Ruby'),
     'sparking rainbow shield': ('15 minutes', '1', 'Small Amethyst'),
     'terran rainbow shield': ('15 minutes', '1', 'Small Emerald'),
     'fiery rainbow shield': ('15 minutes', '1', 'Small Ruby'),
@@ -40,41 +37,46 @@ consumableMap = {
     'enchanted werewolf helmet (club)': ('60 minutes', '1', 'Moonlight Crystals'),
     'enchanted werewolf helmet (sword)': ('60 minutes', '1', 'Moonlight Crystals'),
     'enchanted werewolf helmet (distance)': ('60 minutes', '1', 'Moonlight Crystals'),
-    'enchanted werewolf helmet (magic)': ('60 minutes', '1', 'Moonlight Crystals'),
-    'enchanted werewolf helmet (sword)': ('60 minutes', '1', 'Moonlight Crystals')
+    'enchanted werewolf helmet (magic)': ('60 minutes', '1', 'Moonlight Crystals')
 }
 
 
 def parseItem(title, attributes, c, buyitems, sellitems, currencymap, durationMap, getURL):
     npcValue = None
     if 'npcvalue' in attributes:
-        try: npcValue = int(attributes['npcvalue'])
-        except: pass
-    if (npcValue == None or npcValue == 0) and 'npcprice' in attributes:
-        try: npcValue = int(attributes['npcprice'])
-        except: pass
+        try:
+            npcValue = int(attributes['npcvalue'])
+        except ValueError:
+            pass
+    if (npcValue is None or npcValue == 0) and 'npcprice' in attributes:
+        try:
+            npcValue = int(attributes['npcprice'])
+        except ValueError:
+            pass
     actualValue = None
-    if 'value' in attributes: 
+    if 'value' in attributes:
         match = numberRegex.search(attributes['value'])
-        if match != None: 
+        if match is not None:
             actualValue = int(match.groups()[0].replace(',','').replace('.',''))
     npcPrice = None
     if 'npcprice' in attributes:
-        try: 
+        try:
             npcPrice = int(attributes['npcprice'])
-            if actualValue != None and npcPrice > 0 and actualValue > npcPrice:
+            if actualValue is not None and 0 < npcPrice < actualValue:
                 actualValue = npcPrice
-        except: 
+        except ValueError:
             pass
-    if npcValue != None and (actualValue == None or npcValue > actualValue):
+    if npcValue is not None and (actualValue is None or npcValue > actualValue):
         actualValue = npcValue
     name = title
     if 'actualname' in attributes and len(attributes['actualname']) > 0:
         name = attributes['actualname']
     capacity = None
     if 'weight' in attributes:
-        try: capacity = float(attributes['weight'])
-        except: pass
+        try:
+            capacity = float(attributes['weight'])
+        except ValueError:
+            pass
     stackable = False
     if 'stackable' in attributes:
         stackable = 'yes' in attributes['stackable'].strip().lower()
@@ -94,50 +96,58 @@ def parseItem(title, attributes, c, buyitems, sellitems, currencymap, durationMa
         durationText = attributes['duration']
         itemcost = title
         itemcostcount = 1
-    if durationText != None:
+    if durationText is not None:
         match = numberRegex.search(durationText)
-        if match != None:
+        if match is not None:
             duration = float(match.groups()[0])
-            if duration != None:
+            if duration is not None:
                 if 'minute' in durationText:
                     duration *= 60
                 elif 'hour' in durationText:
                     duration *= 3600
-    if duration != None:
+    if duration is not None:
         durationMap[title] = (duration, itemcost, itemcostcount)
-    # tibia wiki uses some function to get the image url rather than storing it explicitly, and I don't really want to bother to decipher it
+    # Tibia wiki uses some function to get the image url rather than storing it explicitly, and I don't really want to bother to decipher it
     url = "http://tibia.wikia.com/wiki/%s" % (title.replace(' ', '_'))
     itemHTML = getURL(url, True)
-    if itemHTML == None: return False
+    if itemHTML is None:
+        return False
     image = getImage(url, getURL, imageRegex, properly_crop_item)
-    if image == None or image == False:
+    if image is None or not image:
         url = "http://tibia.wikia.com/wiki/File:%s.gif" % (title.replace(' ', '_'))
         image = getImage(url, getURL, imageRegex2, properly_crop_item)
-        if image == None or image == False:
+        if image is None or not image:
             print("Error on item {0}: Failed to get image".format(title))
     match = lookRegex.search(itemHTML)
     look_text = None
-    if match != None:
+    if match is not None:
         look_text = match.groups()[0]
         look_text = look_text.replace('&#32;', ' ').replace('\n', ' ').replace('.', '. ').replace('.  ', '. ')
         look_text = re.sub(r'[.] (\d)', '.\g<1>', look_text).strip()
         while True:
             match = htmlTagRegex.search(look_text)
-            if match == None: break
+            if match is None:
+                break
             look_text = look_text[:match.start()] + look_text[match.end():]
     convert_to_gold, discard = False, False
 
-    gold_ratio = max(0 if npcValue == None else npcValue, 0 if actualValue == None else actualValue) / (1 if capacity == None or capacity == 0 else capacity)
-    if gold_ratio < 10: discard = True
-    if gold_ratio < 20 and stackable == False: convert_to_gold = True
-    else: convert_to_gold = False
+    gold_ratio = max(0 if npcValue is None else npcValue, 0 if actualValue is None else actualValue) / (1 if capacity is None or capacity == 0 else capacity)
+    if gold_ratio < 10:
+        discard = True
+    if gold_ratio < 20 and stackable == False:
+        convert_to_gold = True
+    else:
+        convert_to_gold = False
 
-    c.execute('INSERT INTO Items (title,name, vendor_value, actual_value, capacity, stackable, image, category, discard, convert_to_gold, look_text) VALUES (?,?,?,?,?,?,?,?,?,?,?)', (title,name, npcValue, actualValue, capacity, stackable, image, category, discard, convert_to_gold, look_text))
+    c.execute('INSERT INTO Items (title,name, vendor_value, actual_value, capacity, stackable, image, category, '
+              'discard, convert_to_gold, look_text) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+              (title, name, npcValue, actualValue, capacity, stackable, image, category, discard, convert_to_gold,
+               look_text))
     itemid = c.lastrowid
     if 'itemid' in attributes:
         splits = attributes['itemid'].split(',')
         for item in splits:
-            try: 
+            try:
                 tibiaid = int(item.strip())
                 c.execute('INSERT INTO ItemIDMap (tibiaid, itemid) VALUES (?,?)', (tibiaid, itemid))
             except:
@@ -149,23 +159,24 @@ def parseItem(title, attributes, c, buyitems, sellitems, currencymap, durationMa
             npc = n
             if npc == '' or npc == '-' or npc == '--': continue
             value = npcPrice
-            if ';' in npc: 
+            if ';' in npc:
                 npc = npc.split(';')[0]
             if ':' in npc:
                 token = npc.split(':')[1].strip()
                 npc = npc.split(':')[0]
-                try: 
+                try:
                     value = math.ceil(float(token))
-                except: 
+                except ValueError:
                     match = re.search('\\[\\[([^]]+)\\]\\]', token)
-                    if match == None:
+                    if match is None:
                         continue
                     currencymap[itemid] = match.groups()[0]
                     match = numberRegex.search(token)
-                    if match == None:
+                    if match is None:
                         continue
                     value = float(match.groups()[0])
-            if value == None: continue
+            if value is None:
+                continue
             buyitems[itemid][npc.strip()] = value
     if 'sellto' in attributes:
         sellitems[itemid] = dict()
@@ -174,16 +185,20 @@ def parseItem(title, attributes, c, buyitems, sellitems, currencymap, durationMa
             npc = n
             if npc == '' or npc == '-' or npc == '--': continue
             value = npcValue
-            if ';' in npc: 
+            if ';' in npc:
                 npc = npc.split(';')[0]
             if ':' in npc:
                 value = math.ceil(float(npc.split(':')[1].strip()))
                 npc = npc.split(':')[0]
-            if value == None: continue
+            if value is None:
+                continue
             sellitems[itemid][npc.strip()] = value
     if 'vocrequired' in attributes and len(attributes['vocrequired'].strip()) > 1:
-        attributes['vocrequired'] = attributes['vocrequired'].replace('knights', 'k').replace('druids', 'd').replace('sorcerers', 's').replace('paladins', 'p').replace(' and ','+')
-        c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Voc', attributes['vocrequired'].strip()))
+        attributes['vocrequired'] = attributes['vocrequired'].replace('knights', 'k').replace('druids', 'd').\
+            replace('sorcerers', 's').replace('paladins', 'p').replace(' and ', '+')
+        c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)',
+                  (itemid, 'Voc', attributes['vocrequired'].strip()))
+
     if 'resist' in attributes and len(attributes['resist'].strip()) > 1:
         elemental = attributes["resist"].split(",")
         for element in elemental:
@@ -203,24 +218,26 @@ def parseItem(title, attributes, c, buyitems, sellitems, currencymap, durationMa
             f.write('%s=%s\n' % (plural, name.strip().lower()))
             f.close()
     if 'damagetype' in attributes and len(attributes['damagetype'].strip()) > 1:
-        c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Type', attributes['damagetype'].strip()))
+        c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)',
+                  (itemid, 'Type', attributes['damagetype'].strip()))
     if 'attrib' in attributes and len(attributes['attrib'].strip()) > 1:
-        attrib = attributes['attrib'].strip().replace("fighting", "").replace("level", "").replace("[","").replace("]","").replace("faster regeneration", "regen +1")
+        attrib = attributes['attrib'].strip().replace("fighting", "").replace("level", "").replace("[","").\
+            replace("]","").replace("faster regeneration", "regen +1")
         c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Attrib', attrib))
     if 'armor' in attributes and len(attributes['armor'].strip()) > 0:
-        try: 
+        try:
             armor = int(attributes['armor'].strip())
             c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Arm', str(armor)))
-        except: 
+        except ValueError:
             print(name)
             print(attributes['armor'])
             exit(1)
             pass
     if 'attack' in attributes and len(attributes['attack'].strip()) > 0:
-        try: 
+        try:
             attack = int(attributes['attack'].strip())
             c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Atk', str(attack)))
-        except: 
+        except ValueError:
             attack = 0
             for atk in re.findall('[0-9]+', attributes['attack']):
                 attack += int(atk)
@@ -229,43 +246,43 @@ def parseItem(title, attributes, c, buyitems, sellitems, currencymap, durationMa
                 print(attributes['attack'])
                 exit(1)
                 pass
-            else: 
+            else:
                 c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Atk', str(attack)))
     if 'defense' in attributes and len(attributes['defense'].strip()) > 0:
-        try: 
+        try:
             defense = int(attributes['defense'].strip())
-            if 'defensemod' in attributes and len(attributes['defensemod'].strip()) > 1: 
+            if 'defensemod' in attributes and len(attributes['defensemod'].strip()) > 1:
                 defense = str(defense) + ' (' + attributes['defensemod'].strip() + ')'
             c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Def', str(defense)))
-        except: 
+        except ValueError:
             print(name)
             print(attributes['defense'])
             exit(1)
             pass
     if 'levelrequired' in attributes and len(attributes['levelrequired'].strip()) > 0:
-        try: 
+        try:
             levelrequired = int(attributes['levelrequired'].strip())
             c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Level', str(levelrequired)))
-        except: 
+        except ValueError:
             print(name)
             print(attributes['levelrequired'])
             exit(1)
     if 'damage' in attributes and len(attributes['damage'].strip()) > 0:
-        try: 
+        try:
             damage = int(attributes['damage'].strip())
             c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Atk', str(damage)))
-        except: 
-            try: 
+        except ValueError:
+            try:
                 spl = attributes['damage'].split('-')
                 damage = int((int(spl[0].strip()) + int(spl[1].strip())) / 2)
                 c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Atk', str(damage)))
-            except:
+            except ValueError:
                 pass
     if 'range' in attributes and len(attributes['range'].strip()) > 0:
-        try: 
+        try:
             rng = int(attributes['range'].strip())
             c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Range', str(rng)))
-        except: 
+        except ValueError:
             pass
     if 'atk_mod' in attributes and len(attributes['atk_mod'].strip()) > 0:
         c.execute('INSERT INTO ItemProperties(itemid, property, value) VALUES (?,?,?)', (itemid, 'Atk+', attributes['atk_mod'].strip()))

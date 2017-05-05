@@ -9,5 +9,6 @@ pluralMap.txt
 # Cache files
 tempcache
 imagecache
+valuedict
 
 tibiawiki_pages_current.xml
